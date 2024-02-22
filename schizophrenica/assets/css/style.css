@@ -1,0 +1,173 @@
+/* Loading fonts */
+@font-face {
+    font-family: 'Silkscreen';
+    src: url('../fonts/silkscreen.ttf') format('truetype');
+}
+@font-face {
+    font-family: 'Teko';
+    src: url('../fonts/teko.ttf') format('truetype');
+}
+/* Mobile device "compatibility" (still needs work)*/
+@media screen and (max-width: 888px) {
+    .outer-88x31-border {
+        display: none !important;
+    }
+    .inner-88x31-border {
+        display: none !important;
+    }
+    .gif {
+        display: none !important;
+    }
+    #title-text {
+        top: 0%;
+    }
+    .gif {
+        transform: scale(0.9); 
+        height: auto;
+        margin: 1.5px; 
+    }
+    #centered-text h1 {
+        left: 50% !important;
+        top: 20% !important;
+        transform: translate(-50%, -50%);
+    }
+    .centered-container-outer, .specs-container-outer, .contact-container-outer {
+        width: 300px !important;
+        top: 35% !important;
+        left: 50% !important;
+        transform: translate(-50%, -50%);
+      }
+    .specs-container-outer {
+        top: 75% !important;
+    }
+    .contact-container-outer {
+        top: 107% !important;
+    }
+}
+/* body configuration */
+html, body {
+    height: 100%;
+    margin: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+/* body styling for background*/
+body {
+    /* background changed to black, as the mandelbulb shader has a black background */
+    /* background-color: rgb(75, 0, 75); */
+    background-color: black;
+  }
+
+
+/* Title styling */
+#title-text {
+    font-family: 'Silkscreen', sans-serif; /* Ensures the original font is preserved */
+    color: #ffffff;
+    font-size: 110px;
+    text-align: center;
+    position: absolute;
+    letter-spacing: 10px;
+    top: 42%;
+    left: 50%;
+    transform: translateX(-50%);
+    text-shadow: 4px 4px 3px black;
+    -webkit-text-stroke: 0.2px black;
+    overflow: hidden; /* Ensures the effect doesn't go beyond the text's area */
+    white-space: nowrap; /* Keeps the text in a single line */
+    clip: rect(auto, auto, auto, auto); /* Ensures the element is fully visible */
+    text-shadow: 4px 4px 3px black;
+    -webkit-text-stroke: 0.2px black;
+}
+
+/* Glitch Effect Using Pseudo-Elements */
+@keyframes glitch-animation {
+    0% {
+        text-shadow: 
+            3px 0 red,
+            -3px 0 cyan;
+    }
+    20% {
+        text-shadow: 
+            -3px 0 red,
+            3px 0 cyan;
+    }
+    40% {
+        text-shadow: 
+            3px 0 red,
+            -3px -3px cyan;
+    }
+    60% {
+        text-shadow: 
+            -3px -3px red,
+            3px 3px cyan;
+    }
+    80% {
+        text-shadow: 
+            3px 3px red,
+            -3px -3px cyan;
+    }
+    100% {
+        text-shadow: 
+            -3px -3px red,
+            3px 3px cyan;
+    }
+}
+
+#title-text::before,
+#title-text::after {
+    content: attr(data-text); /* Utilizes the data attribute for text content */
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    width: 100%; /* Ensure coverage is based on the actual text width */
+    height: 100%;
+    font-family: 'Silkscreen', sans-serif; /* Maintains the original font */
+    font-size: 110px; /* Ensures the font size is consistent */
+    text-align: center;
+    -webkit-text-stroke: 0.2px black; /* Maintains text stroke for consistency */
+    clip: rect(auto, auto, auto, auto);
+    opacity: 0; /* Hide pseudo-elements by default */
+    transition: 0.5s ease;  
+    cursor: pointer;
+}
+
+/* Hover state activates the glitch animation */
+#title-text:hover::before,
+#title-text:hover::after {
+    opacity: 1; /* Make pseudo-elements visible */
+    transition: opacity 0.5s ease; 
+}
+
+#title-text:hover::before {
+    animation: glitch-animation 2s infinite linear alternate-reverse;
+    color: #ffffff; /* Magenta shade for the top layer of the glitch */
+}
+
+#title-text:hover::after {
+    animation: glitch-animation 2.5s infinite linear alternate;
+    color: #000000; /* Cyan shade for the bottom layer of the glitch */
+}
+.input-container {
+    position: absolute;
+    top: 85%; /* Set it 80% from the top of the page */
+    left: 50%; /* Set it at the halfway point of the page horizontally */
+    transform: translateX(-50%); /* Shift it left by half its own width to truly center it */
+    width: 100%; /* Use the full width of the viewport */
+}
+
+#prompt-input {
+    /* The input field properties */
+    background: transparent; /* No background */
+    border: none; /* No border */
+    outline: none; /* No focus outline */
+    color: rgba(255, 255, 255, 0.541); /* White text color */
+    font-family: 'Silkscreen', sans-serif; /* Custom font */
+    font-size: 25px; /* Font size of the input text */
+    width: auto; /* Auto width to contain the text */
+    text-align: center; /* Center the text inside the input */
+    margin: 0 auto; /* Center the input within its container */
+    display: block; /* Use a block level element for proper margin-handling */
+}

@@ -1,0 +1,7 @@
+body {
+    opacity: 0; /* hide whole body (>.<) to prevent users seeing load-in of elements */
+    transition: opacity 1s ease-in-out; /* fade in the content slowly, for a "modern" effects (i fucking hate modern web design) */
+}
+body.loaded {
+    opacity: 1; /* using js in fadeIn.js, we apply this to the body to trigger the fade-in after loading all elements. */
+}

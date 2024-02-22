@@ -1,0 +1,538 @@
+﻿<!DOCTYPE html>
+<html><head>
+    <title>mandelbulb embed </title>
+
+ 
+<script id="shader-vs" type="x-shader/x-vertex"> 
+  attribute vec2 vPos;
+  void main(void) {
+  gl_Position = vec4(vPos, 0., 1.);
+}
+
+</script> 
+
+
+<link rel="stylesheet" type="text/css" href="/assets/mandel/jsLib/slider/slider.css" media="screen" />
+<link rel="stylesheet" type="text/css" href="/assets/mandel/jsLib/tools.css" media="screen" />
+
+<script type="text/javascript">
+    var ctxGL = null;
+    var progM = null;
+    var canvasM = null;
+    var leftArcBall = null;
+    var rightArcBall = null;
+    var Zoom = 1.0;
+    var phongMethod = -1.0;
+
+    var timerFullRender = 0;
+
+    var useShadow = true;
+    var useAO = true;
+
+    var isToolsOpened = false;
+    var isLMouseDown = false;
+    var isRMouseDown = false;
+
+    var mTransp = { x: -0.75, y: 0.0 };
+    var mScale = { x: 1.5, y: 1.5 };
+    var mStepScale = 1.0;
+    var mousePos = { x: 2.9645, y: 0.0 };
+
+    var zoomPixel = [
+        0.25,
+        0.5,
+        1.0,
+        2.0,
+        4.0,
+    ];
+
+    var uniformNames = [
+                        "lightR",
+                        "lightG",
+                        "lightB",
+                        "diffIntensity",                        
+                        "specularComponent",
+                        "specularExponent",
+                        "ambientLight",
+                        "normalComponent",
+                        "shadowDarkness",
+                        "aoMult", "aoSub", "aoMix",
+                        "Power",                        
+                        "maxIterations",
+                        "maxDetailIter",
+                        "epsilon"
+                       ];
+
+
+
+
+</script>
+
+<script type="text/javascript" src="/assets/mandel/jsLib/gl-matrix/common.js"></script>
+<script type="text/javascript" src="/assets/mandel/jsLib/gl-matrix/vec3.js"></script>
+<script type="text/javascript" src="/assets/mandel/jsLib/gl-matrix/vec2.js"></script>
+<script type="text/javascript" src="/assets/mandel/jsLib/gl-matrix/vec4.js"></script>
+<script type="text/javascript" src="/assets/mandel/jsLib/gl-matrix/quat.js"></script>
+<script type="text/javascript" src="/assets/mandel/jsLib/gl-matrix/mat3.js"></script>
+<script type="text/javascript" src="/assets/mandel/jsLib/gl-matrix/mat4.js"></script>
+<script type="text/javascript" src="/assets/mandel/jsLib/arcBall.js"></script>
+
+<script type="text/javascript" src="/assets/mandel/jsLib/slider/slider.js"></script>
+
+<script type="text/javascript">
+
+
+
+function getShader(gl, id) {
+    var shaderScript = document.getElementById(id);
+    var str = "";
+    var k = shaderScript.firstChild;
+    while (k) {
+        if (k.nodeType == 3) str += k.textContent;
+        k = k.nextSibling;
+    }
+    var shader;
+    if (shaderScript.type == "x-shader/x-fragment")
+        shader = gl.createShader(gl.FRAGMENT_SHADER);
+    else if (shaderScript.type == "x-shader/x-vertex")
+        shader = gl.createShader(gl.VERTEX_SHADER);
+    else return null;
+    gl.shaderSource(shader, str);
+    gl.compileShader(shader);
+    if (gl.getShaderParameter(shader, gl.COMPILE_STATUS) == 0)
+        alert(gl.getShaderInfoLog(shader));
+
+
+    return shader;
+}
+
+function getShaderFromFile(gl, url, type)
+{
+    var req = new XMLHttpRequest();
+    req.open("GET", url, false);
+    req.send(null);
+
+    var shader = null;
+    if (req.status == 200 || req.status == 0) {
+
+        shader = gl.createShader(type);
+
+        gl.shaderSource(shader, req.responseText);
+
+        gl.compileShader(shader);
+        if (gl.getShaderParameter(shader, gl.COMPILE_STATUS) == 0)
+            alert(gl.getShaderInfoLog(shader));
+    }
+
+    return shader;
+}
+
+
+
+var controls = [];
+
+
+
+
+function render(isFullRender)
+{
+    if(typeof(isFullRender) === "undefined") isFullRender = false;
+
+    ctxGL.uniform3f(ctxGL.getUniformLocation(progM, "resolution"), canvasM.width, canvasM.height, canvasM.width/canvasM.height);
+
+    ctxGL.uniform1i(ctxGL.getUniformLocation(progM, "isFullRender"), isFullRender);
+    ctxGL.uniform1f(ctxGL.getUniformLocation(progM, "phongMethod"), phongMethod);
+    ctxGL.uniform1i(ctxGL.getUniformLocation(progM, "useShadow"), useShadow);
+    ctxGL.uniform1i(ctxGL.getUniformLocation(progM, "useAO"), useAO);
+
+
+    var world = mat3.create();
+    leftArcBall.rotation(world);
+
+    var vZoom = vec3.fromValues(Zoom, Zoom, Zoom);
+    var mZoom = mat3.create();
+    mat3.scale(mZoom, mZoom, vZoom);
+    mat3.multiply(world, world, mZoom);
+    mat3.invert(world, world);
+
+    ctxGL.uniformMatrix3fv(ctxGL.getUniformLocation(progM, "Orientation"), false, world);
+
+    var vLight = vec3.fromValues(3, 3, 3);
+    var mLightRot = mat3.create();
+    rightArcBall.rotation(mLightRot);
+
+
+    mat3.mulVec3(vLight, mLightRot, vLight);
+
+    ctxGL.uniform3f(ctxGL.getUniformLocation(progM, "Light"), vLight[0], vLight[1], vLight[2]);
+
+    ctxGL.drawArrays(ctxGL.TRIANGLE_STRIP, 0, 4);
+
+
+    if(isFullRender==false) {
+        if(timerFullRender!=0) clearTimeout(timerFullRender);
+        timerFullRender = setTimeout("render(true)", 10000);
+    }
+    
+
+}
+
+function onResize() 
+{
+
+    var i = document.getElementById("screenDef").selectedIndex;
+
+    canvasM.width = window.innerWidth / zoomPixel[i]; //  / .5
+    canvasM.height = window.innerHeight / zoomPixel[i]; //   / .5
+    canvasM.style.width = window.innerWidth + 'px';
+    canvasM.style.height = window.innerHeight + 'px';
+
+
+    ctxGL.viewport(0, 0, canvasM.width, canvasM.height);
+    leftArcBall.setWindowSize(canvasM.width* zoomPixel[i], canvasM.height* zoomPixel[i]);
+    rightArcBall.setWindowSize(canvasM.width* zoomPixel[i], canvasM.height* zoomPixel[i]);
+
+    if (progM) render();
+
+}
+
+
+
+function getMousePos(canvas, evt) {
+    return {
+        x: evt.clientX,
+        y: evt.clientY
+    };
+}
+
+
+function windowTools()
+{
+    if (isToolsOpened) { popupTools.style.display = "none"; isToolsOpened = false; }
+    else               { popupTools.style.display = "block"; isToolsOpened = true; }
+
+}
+
+
+function togglePhong()
+{
+    phongMethod = document.getElementById('phongCheck').checked ? 1 : -1;
+    render();
+
+}
+
+function toggleAO()
+{
+    useAO = document.getElementById('aoCheck').checked;
+    render();
+}
+
+function toggleShadow()
+{
+    useShadow = document.getElementById('shadowCheck').checked;
+    render();
+}
+
+function webGLStart() {
+
+    var controller;
+    
+
+    //here we create the canvas for the mandelbulb render.
+    var effect = document.createElement('div');
+    document.body.appendChild(effect);
+
+    canvasM = document.createElement('canvas');
+    effect.appendChild(canvasM);
+
+
+    try {
+        console.log("WebGL canvas created.")
+        ctxGL = canvasM.getContext("webgl", { alpha: true, premultipliedAlpha: false }) || canvasM.getContext("experimental-webgl", { alpha: true, premultipliedAlpha: false });
+
+    } catch (e) { }
+    if (!ctxGL) { alert("your browser does not support WebGL. you can still view my website normally, except you wont get a fancy mandelbulb render (:"); return; }
+
+
+    progM = ctxGL.createProgram();
+    ctxGL.attachShader(progM, getShader(ctxGL, "shader-vs"));
+    ctxGL.attachShader(progM, getShaderFromFile(ctxGL, "mbFragES2.glsl", ctxGL.FRAGMENT_SHADER));
+    ctxGL.linkProgram(progM);
+    ctxGL.useProgram(progM);
+
+    var posAtrLocM = ctxGL.getAttribLocation(progM, "vPos");
+
+    var verticesM = new Float32Array([-1, -1, 1, -1, -1, 1, 1, 1]);
+    ctxGL.bindBuffer(ctxGL.ARRAY_BUFFER, ctxGL.createBuffer());
+    ctxGL.bufferData(ctxGL.ARRAY_BUFFER, verticesM, ctxGL.STATIC_DRAW);
+
+    ctxGL.vertexAttribPointer(posAtrLocM, 2, ctxGL.FLOAT, false, 0, 0);
+    ctxGL.enableVertexAttribArray(posAtrLocM);
+
+    leftArcBall = new ArcBall();
+    rightArcBall = new ArcBall();
+
+
+    var obj = document.getElementById('controls').getElementsByTagName('dd');
+
+    var items = parseInt(obj.length / sliderComponents);
+    for (var i = 0; i < items; i++) {
+        controls[controls.length] = new Slider(obj, i, uniformNames[i]);
+    }
+
+    document.getElementById('aoCheck').checked = useAO;
+    document.getElementById('shadowCheck').checked = useShadow;
+    document.getElementById('phongCheck').checked = phongMethod == -1 ? false : true;
+
+
+    window.addEventListener("resize", onWindowsResize, false);
+    canvasM.addEventListener("mousemove", onMouseMove, false);
+
+    canvasM.addEventListener("mousedown", onMouseDown, false);
+    canvasM.addEventListener("mouseup", onMouseUp, false);
+    canvasM.addEventListener("mouseover", onMouseUp, false);
+    canvasM.addEventListener("mousewheel", onMouseWheel, false);
+    canvasM.addEventListener("DOMMouseScroll", onMouseWheel, false);
+
+    function onWindowsResize(evt) { onResize(); }
+
+    function onMouseDown(evt) {
+        switch(evt.which) {
+            case 1:
+                isLMouseDown = true;
+                leftArcBall.start(evt.clientX, evt.clientY);
+                break;
+            case 2:
+                break;
+            case 3:
+                isRMouseDown = true;
+                rightArcBall.start(evt.clientX, evt.clientY);
+                break;
+            default:
+        }
+    }
+
+    function onMouseUp(evt) {
+        switch (evt.which) {
+            case 1:
+                isLMouseDown = false;
+                leftArcBall.stop();
+                break;
+            case 2:
+                break;
+            case 3:
+                isRMouseDown = false;
+                rightArcBall.stop();
+                break;
+            default:
+        }
+    }
+
+    function onMouseMove(evt) {
+        if(isLMouseDown) {
+            mousePos = getMousePos(canvasM, evt);
+            leftArcBall.drag(mousePos.x, mousePos.y);
+            render();
+        } else if(isRMouseDown) {
+            mousePos = getMousePos(canvasM, evt);
+            rightArcBall.drag(mousePos.x, mousePos.y);
+            render();
+        }
+    }
+    
+    
+    var targetZoom = Zoom;
+    var zooming = false;
+    /* smooth zoom implentation (by chatgpt do not judge me) */
+    function smoothZoom() {
+        if (Math.abs(targetZoom - Zoom) < 0.01) {
+            Zoom = targetZoom; 
+            zooming = false;
+            return;
+        }
+        /* change zoom smoothness here*/
+        Zoom += (targetZoom - Zoom) * .051; 
+        render(); 
+        requestAnimationFrame(smoothZoom);
+    }
+
+    function onMouseWheel(evt) {
+        var spin = evt.wheelDelta;
+        targetZoom += 0.033 * Math.max(-1, Math.min(1, (evt.wheelDelta || -evt.detail)));
+        targetZoom = Math.max(.5, Math.min(4.5, targetZoom)); 
+
+        if (!zooming) {
+            zooming = true;
+            requestAnimationFrame(smoothZoom);
+        }
+    }
+
+
+    for (i = 0; i < zoomPixel.length; i++) {
+        screenDef.appendChild(document.createElement("option")).text = zoomPixel[i];
+    }
+    document.getElementById("screenDef").selectedIndex = 2;
+
+
+    onResize();
+
+
+}
+
+</script>
+
+</head>
+
+<body onload="webGLStart();" oncontextmenu="return false;" style="color: #CCCCCC; background-color: #000000">
+
+<div id="popupTools" class="toolsWindow" style="height:700px">
+    <div class ="toolsTitle" >
+      <b>T o o l s</b></div>
+
+
+    <div id="controls">
+
+
+          <div class="clear"></div>
+
+          <dl class="col">
+
+            <dt>Color</dt>
+            <dd class="title">Red component</dd>
+            <dd>0.0</dd><dd>1.0</dd><dd>1</dd><dd>2</dd>
+            <dd class="control">
+             <div class="bar" title="Click to move here"></div>
+             <div class="slider" title=""></div>
+            </dd>
+            <dt>Color</dt>
+            <dd class="title">Green component</dd>
+            <dd>0.0</dd><dd>1.0</dd><dd>0.3</dd><dd>2</dd>
+            <dd class="control">
+             <div class="bar" title="Click to move here"></div>
+             <div class="slider" title=""></div>
+            </dd>
+            <dt>Color</dt>
+            <dd class="title">Blue component</dd>
+            <dd>0.0</dd><dd>1.0</dd><dd>1</dd><dd>2</dd>
+            <dd class="control">
+             <div class="bar" title="Click to move here"></div>
+             <div class="slider" title=""></div>
+            </dd>
+            <dt>Intensity</dt>
+            <dd class="title">Diffuse Int.</dd>
+            <dd>0.0</dd><dd>4.0</dd><dd>1.7</dd><dd>2</dd>
+            <dd class="control">
+             <div class="bar" title="Click to move here"></div>
+             <div class="slider" title=""></div>
+            </dd>
+            <dt>Specular</dt>
+            <dd class="title">component</dd>
+            <dd>0.0</dd><dd>2.0</dd><dd>.75</dd><dd>2</dd>
+            <dd class="control">
+             <div class="bar" title="Click to move here"></div>
+             <div class="slider" title=""></div>
+            </dd>
+            <dt>Specular</dt>
+            <dd class="title">exponent</dd>
+            <dd>0.1</dd><dd>25.0</dd><dd>1.0</dd><dd>2</dd>
+            <dd class="control">
+             <div class="bar" title="Click to move here"></div>
+             <div class="slider" title=""></div>
+            </dd>
+            <dt>Ambient</dt>
+            <dd class="title">Ambielnt int.</dd>
+            <dd>0.0</dd><dd>1.0</dd><dd>0.01</dd><dd>2</dd>
+            <dd class="control">
+             <div class="bar" title="Click to move here"></div>
+             <div class="slider" title=""></div>
+            </dd>
+            <dt>Normal</dt>
+            <dd class="title">color variation</dd>
+            <dd>0.0</dd><dd>2.0</dd><dd>1</dd><dd>2</dd> <!-- change liveliness here-->
+            <dd class="control">
+             <div class="bar" title="Click to move here"></div>
+             <div class="slider" title=""></div>
+            </dd>
+            <p></p>
+            <dt>Shadows</dt>
+            <dd class="title">Darkness</dd>
+            <dd>0.0</dd><dd>1.0</dd><dd>.15</dd><dd>2</dd>
+            <dd class="control">
+             <div class="bar" title="Click to move here"></div>
+             <div class="slider" title=""></div>
+            </dd>
+            <dt>aoMult</dt>
+            <dd class="title">aoMult</dd>
+            <dd>0.0</dd><dd>5.0</dd><dd>1.7</dd><dd>2</dd>
+            <dd class="control">
+             <div class="bar" title="Click to move here"></div>
+             <div class="slider" title=""></div>
+            </dd>
+            <dt>aoSub</dt>
+            <dd class="title">aoSub</dd>
+            <dd>0.0</dd><dd>2.0</dd><dd>.7</dd><dd>2</dd>
+            <dd class="control">
+             <div class="bar" title="Click to move here"></div>
+             <div class="slider" title=""></div>
+            </dd>
+            <dt>aoMix</dt>
+            <dd class="title">aoMix</dd>
+            <dd>0.0</dd><dd>1.0</dd><dd>.55</dd><dd>2</dd>
+            <dd class="control">
+             <div class="bar" title="Click to move here"></div>
+             <div class="slider" title=""></div>
+            </dd>
+            <p></p>
+            <dt>Power</dt>
+            <dd class="title">MBulb power</dd>
+            <dd>1.0</dd><dd>25.0</dd><dd>10</dd><dd>1</dd>
+            <dd class="control">
+             <div class="bar" title="Click to move here"></div>
+             <div class="slider" title=""></div>
+            </dd>
+            <dt>maxIterations</dt>
+            <dd class="title">max Iterations</dd>
+            <dd>1.0</dd><dd>500.0</dd><dd>100</dd><dd>0</dd>
+            <dd class="control">
+             <div class="bar" title="Click to move here"></div>
+             <div class="slider" title=""></div>
+            </dd>
+            <dt>maxDetailIter</dt>
+            <dd class="title">max Detail</dd>
+            <dd>100.0</dd><dd>20000.0</dd><dd>200.0</dd><dd>0</dd>
+            <dd class="control">
+             <div class="bar" title="Click to move here"></div>
+             <div class="slider" title=""></div>
+            </dd>
+            <p></p>
+            <dt>Epsilon</dt>
+            <dd class="title">epsilon</dd>
+            <dd>.00001</dd><dd>.001</dd><dd>0.000510</dd><dd>6</dd>
+            <dd class="control">
+             <div class="bar" title="Click to move here"></div>
+             <div class="slider"></div>
+            </dd>
+            <p></p>
+            <dt>
+            <input type="checkbox" id="aoCheck" onchange="toggleAO()"></input> Ambient Occlusion
+            </dt>
+            <dt>
+            <input type="checkbox" id="shadowCheck" onchange="toggleShadow()"></input> Shadows
+            </dt>
+            <dt>
+             <input type="checkbox" id="phongCheck" onchange="togglePhong()"></input> Invert Light Normal
+             </dt>
+         </dl>
+        
+    </div>
+
+    <div id="cmbScreen">
+        <select id="screenDef"  onchange="onResize()"></select> pixel subdivision 
+    </div>
+
+</div>
+
+
+
+</body>
+</html>
