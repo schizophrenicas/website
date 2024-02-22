@@ -90,4 +90,3 @@ function updateIframeControls(data) {
 }
 
 // This function will likely be called once the fetch promise resolves
-// make sure this function is accessible from where you are calling it
